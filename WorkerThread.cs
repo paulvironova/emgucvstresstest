@@ -52,25 +52,48 @@ namespace EmguStressTest
             this.Thread.Name = threadname;
             this.Thread.Start();
         }
+        // must be called from another thread
+        internal void Abort()
+        {
+            this.Thread.Abort();
+        }
 
-        public void Doit()
+        // must be called from another thread
+        internal void Join()
+        {
+            this.Thread.Join();
+        }
+
+        private void Doit()
         {
             //we will repeatedly get an image, do an operation on it, then possibly
             //give it to someone else
             while (KeepRunning)
             {
-                //System.Console.WriteLine("I am a thread!");
-                Emgu.CV.UMat image1 = GetNextImage();
+                try
+                {
+                    //System.Console.WriteLine("I am a thread!");
+                    Emgu.CV.UMat image1 = GetNextImage();
 
-                //perhaps randomly clone() it and/or set it to null or change it's type
-                Emgu.CV.UMat image2 = DoRandomHouseholding(image1);
+                    //perhaps randomly clone() it and/or set it to null or change it's type
+                    Emgu.CV.UMat image2 = DoRandomHouseholding(image1);
 
-                //do some image operation
-                Emgu.CV.UMat image3 = OperateOnImage(image2);
+                    //do some image operation
+                    Emgu.CV.UMat image3 = OperateOnImage(image2);
 
-                //give it to someone else? or dispose it? or set it to null? who knows!
-                GetRidOfImage(image3);
-
+                    //give it to someone else? or dispose it? or set it to null? who knows!
+                    GetRidOfImage(image3);
+                }
+                catch (System.Threading.ThreadAbortException e)
+                {
+                    //System.Console.WriteLine($"oops, I'm aborted!");                    
+                    this.StackTrace = e.StackTrace;
+                    return;
+                }
+                catch (System.Exception e)
+                {
+                    //maybe something about mismatch in types or so, normal.
+                }
                 //signal that we are alive
                 ++Counter;
             }
@@ -137,27 +160,22 @@ namespace EmguStressTest
                     break;
                 }
             }
-            try
+
+            switch (chosen)
             {
-                switch (chosen)
-                {
-                    case (int)Operation.GAUSSIAN:
-                        return Do_Gaussian(input);
-                    case (int)Operation.PADDING:
-                        return Do_Padding(input);
-                    case (int)Operation.CONVERTTO:
-                        return Do_ConvertTo(input);
-                    case (int)Operation.REGIONMASK:
-                        return Do_RegionMask(input);
-                    default:
-                        //weird. do nothing!
-                        return input;
-                }
+                case (int)Operation.GAUSSIAN:
+                    return Do_Gaussian(input);
+                case (int)Operation.PADDING:
+                    return Do_Padding(input);
+                case (int)Operation.CONVERTTO:
+                    return Do_ConvertTo(input);
+                case (int)Operation.REGIONMASK:
+                    return Do_RegionMask(input);
+                default:
+                    //weird. do nothing!
+                    return input;
             }
-            catch (System.Exception e)
-            {
-                //who cares.
-            }
+
             return input;
         }
 
@@ -191,13 +209,14 @@ namespace EmguStressTest
             Emgu.CV.UMat output;
             if (GetInPlace())
             {
-                output = input;            
-            } else
+                output = input;
+            }
+            else
             {
-                output = new Emgu.CV.UMat();               
+                output = new Emgu.CV.UMat();
             }
             Emgu.CV.CvInvoke.GaussianBlur(input, output, ksize, sigmax, sigmay);
-                return output;            
+            return output;
         }
 
         private Emgu.CV.UMat Do_Padding(Emgu.CV.UMat input)
@@ -211,7 +230,7 @@ namespace EmguStressTest
             var output = new Emgu.CV.UMat();
             Emgu.CV.CvInvoke.CopyMakeBorder(input, output, top, bottom, left, right, Emgu.CV.CvEnum.BorderType.Reflect, new Emgu.CV.Structure.MCvScalar(Random.NextDouble()));
 
-            return output;       
+            return output;
         }
 
         private Emgu.CV.UMat Do_ConvertTo(Emgu.CV.UMat input)
@@ -234,7 +253,6 @@ namespace EmguStressTest
 
         private Emgu.CV.UMat Do_RegionMask(Emgu.CV.UMat input)
         {
-           
             int x = Random.Next(0, input.Size.Width - 1);
             int y = Random.Next(0, input.Size.Height - 1);
             int width = Random.Next(1, input.Size.Width - x);
@@ -248,7 +266,7 @@ namespace EmguStressTest
                 System.Diagnostics.Contracts.Contract.Assert(0 <= roi.Right && roi.Right <= input.Size.Width);
             }
 
-            Emgu.CV.UMat cvResult = new Emgu.CV.UMat(input.Size,input.Depth,input.NumberOfChannels);
+            Emgu.CV.UMat cvResult = new Emgu.CV.UMat(input.Size, input.Depth, input.NumberOfChannels);
             using (var inputInsideRoi = new Emgu.CV.UMat(input, roi))
             using (var resultInsideRoi = new Emgu.CV.UMat(cvResult, roi))
             {
@@ -256,7 +274,7 @@ namespace EmguStressTest
 
                 inputInsideRoi.CopyTo(resultInsideRoi);
                 return cvResult;
-            }         
+            }
         }
 
         private bool GetInPlace()
@@ -274,18 +292,18 @@ namespace EmguStressTest
             int width = Random.Next(1, 2049);
             int height = Random.Next(1, 2049);
             var size = new System.Drawing.Size(width, height);
-            var image=new Emgu.CV.UMat(size, MakeRandomFormat(), 1);
+            var image = new Emgu.CV.UMat(size, MakeRandomFormat(), 1);
             image.SetTo(new Emgu.CV.Structure.MCvScalar(1));
             return image;
         }
 
         Emgu.CV.CvEnum.DepthType MakeRandomFormat()
         {
-            int selector = Random.Next(1,8);
+            int selector = Random.Next(1, 8);
 
             switch (selector)
             {
-            
+
                 case 1:
                     return Emgu.CV.CvEnum.DepthType.Cv8U;
                 case 2:
@@ -316,5 +334,6 @@ namespace EmguStressTest
         private double ProbabilityOfGpuOperation { get; set; } = 0.9;
         private double ProbabilityOfCpuOperation { get; set; } = 0.05;
         private double[] CumulativeProbabilityOfOperation { get; set; }
+        public string StackTrace { get; private set; } = "";
     }
 }

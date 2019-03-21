@@ -14,7 +14,7 @@ namespace EmguStressTest
 
         public void refresh(int value, System.Diagnostics.Stopwatch watch)
         {
-            if(value==lastcounter)
+            if (value == lastcounter)
             {
                 //no update.
                 return;
@@ -40,7 +40,7 @@ namespace EmguStressTest
         public void showStatus()
         {
             var now = clock_.Elapsed;
-            string hangstring="";
+            string hangstring = "";
             long total = 0;
             for (int i = 0; i < Nthreads_; ++i)
             {
@@ -48,9 +48,31 @@ namespace EmguStressTest
                 hangstring += System.FormattableString.Invariant($"{dt.TotalSeconds,5:F1}  ");
                 total += status_[i].lastcounter;
             }
-            System.Console.WriteLine($"{total}"+hangstring);
+            System.Console.WriteLine($"{total}" + hangstring);
         }
-            
+        public TimeSpan AgeOfUpdate(int i)
+        {
+            var now = clock_.Elapsed;
+            TimeSpan dt = now - status_[i].When;
+            return dt;
+        }
+        public TimeSpan OldestUpdate()
+        {
+            var ret = TimeSpan.MinValue;
+            var now = clock_.Elapsed;
+            string hangstring = "";
+            long total = 0;
+            for (int i = 0; i < Nthreads_; ++i)
+            {
+                TimeSpan dt = now - status_[i].When;
+                if (dt > ret)
+                {
+                    ret = dt;
+                }
+            }
+            return ret;
+        }
+
         private int Nthreads_ = -1;
         private HangStatusSingle[] status_;
         private System.Diagnostics.Stopwatch clock_;
@@ -65,15 +87,18 @@ namespace EmguStressTest
 
         private System.Collections.Concurrent.ConcurrentQueue<Emgu.CV.UMat> ImageQueue { get; set; } = new System.Collections.Concurrent.ConcurrentQueue<Emgu.CV.UMat>();
 
+        public TimeSpan HangtimeLimit { get; private set; } = TimeSpan.FromSeconds(200);
+
         // thread safe wrt. Pop
         internal void Push(Emgu.CV.UMat image)
         {
             if (image != null)
             {
-                if (ImageQueue.Count < Nthreads_*2)
+                if (ImageQueue.Count < Nthreads_ * 2)
                 {
                     ImageQueue.Enqueue(image);
-                } else
+                }
+                else
                 {
                     //we are reaching into memory limits, so dispose it to prevent
                     //exhausting the ram
@@ -85,7 +110,7 @@ namespace EmguStressTest
         internal Emgu.CV.UMat Pop()
         {
             Emgu.CV.UMat ret = null;
-            if(ImageQueue.TryDequeue(out ret))
+            if (ImageQueue.TryDequeue(out ret))
             {
                 return ret;
             }
@@ -94,14 +119,16 @@ namespace EmguStressTest
 
         private void Run()
         {
-            var threads= new System.Collections.Generic.List<WorkerThread>();
-            for(int i=0; i<Nthreads_; ++i)
+            var threads = new System.Collections.Generic.List<WorkerThread>();
+            for (int i = 0; i < Nthreads_; ++i)
             {
-                var wt = new WorkerThread(this,$"WT {i}",1234+i);
+                var wt = new WorkerThread(this, $"WT {i}", 1234 + i);
                 threads.Add(wt);
             }
             var hangstatus = new HangStatusGroup(Nthreads_);
-            while (true)
+
+            bool keeprunning = true;
+            while (keeprunning)
             {
                 //wait a while before asking the threads how it goes.                
                 System.Threading.Thread.Sleep(1000);
@@ -111,8 +138,32 @@ namespace EmguStressTest
                     hangstatus.updateThread(i, threads[i].Counter);
                 }
                 hangstatus.showStatus();
+
+                for (int i = 0; i < Nthreads_; ++i)
+                {
+                    TimeSpan age = hangstatus.AgeOfUpdate(i);
+                    if (age > HangtimeLimit)
+                    {
+                        System.Console.WriteLine($"Aborting thread {i} because it appears stuck.");
+                        threads[i].Abort();
+                        keeprunning = false;
+                    }
+                }
             }
-           
+
+            //stop all threads normally
+            System.Console.WriteLine($"stopping all threads gently...");
+            for (int i = 0; i < Nthreads_; ++i)
+            {
+                threads[i].KeepRunning = false;
+            }
+
+            //join them
+            for (int i = 0; i < Nthreads_; ++i)
+            {
+                threads[i].Join();
+                System.Console.WriteLine($"Thread {i} has stacktrace: {threads[i].StackTrace}");
+            }
         }
 
 
@@ -121,7 +172,7 @@ namespace EmguStressTest
             //this does not work
             //System.Environment.SetEnvironmentVariable("OPENCV_OPENCL_DEVICE", ":GPU:0");
             System.Console.WriteLine($"todiloo! Emgu GPU is {Emgu.CV.Ocl.Device.Default.Name}");
-            
+
             //setup a program object
             var st = new StressTest();
 
