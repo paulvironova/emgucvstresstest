@@ -8,7 +8,7 @@ namespace EmguStressTest
         //this pair represents the earliest known time when counter was that value.
         // in case the counter is reported to be the same value again, the timestamp
         // will remain at the last value
-        private int lastcounter { get; set; }
+        public int lastcounter { get; private set; }
 
         public TimeSpan When { get; private set; }
 
@@ -41,12 +41,14 @@ namespace EmguStressTest
         {
             var now = clock_.Elapsed;
             string hangstring="";
-            for(int i=0; i<Nthreads_;++i)
+            long total = 0;
+            for (int i = 0; i < Nthreads_; ++i)
             {
                 TimeSpan dt = now - status_[i].When;
-                hangstring += System.FormattableString.Invariant($"{i}:{dt.TotalSeconds:F1}  ");                
+                hangstring += System.FormattableString.Invariant($"{dt.TotalSeconds,5:F1}  ");
+                total += status_[i].lastcounter;
             }
-            System.Console.WriteLine(hangstring);
+            System.Console.WriteLine($"{total}"+hangstring);
         }
             
         private int Nthreads_ = -1;
@@ -68,7 +70,7 @@ namespace EmguStressTest
         {
             if (image != null)
             {
-                if (ImageQueue.Count < 1000)
+                if (ImageQueue.Count < Nthreads_*2)
                 {
                     ImageQueue.Enqueue(image);
                 } else
@@ -110,52 +112,7 @@ namespace EmguStressTest
                 }
                 hangstatus.showStatus();
             }
-            //make sure *all* the threads make progress, otherwise they are in a deadlock.
-            //this works like a watchdog.
-            var lastvalues=new int[Nthreads_];
-            var currentvalues = new int[Nthreads_];
-
-            var thread_is_stuck = new bool[Nthreads_];
-            bool anyone_is_stuck = false;
-            while (!anyone_is_stuck)
-            {
-                for (int i = 0; i < 10; ++i)
-                {
-                    System.Threading.Thread.Sleep(WatchDogTimeoutMs/10);
-                    System.Console.WriteLine($"ImageQueue.Count={ImageQueue.Count}");
-                }
-                for (int i = 0; i < Nthreads_; ++i)
-                {
-                    currentvalues[i] = threads[i].Counter;
-                    if (lastvalues[i] == currentvalues[i])
-                    {
-                        //this thread is stuck.
-                        System.Console.WriteLine($"Thread {i} does not make progress (counter={currentvalues[i]}).");
-                        //throw new System.Exception($"Watchdog - thread {i} has not make progress for at least {WatchDogTimeoutMs} ms.");
-                        //anyone_is_stuck = true;
-                        thread_is_stuck[i] = true;
-                    }
-                   
-                    lastvalues[i] = currentvalues[i];
-                }
-                if (!anyone_is_stuck)
-                {
-                    System.Console.WriteLine($"All threads are making progress. First thread has made {currentvalues[0]} iterations.");
-                }
-            }
-
-            for (int i = 0; i < Nthreads_; ++i)
-            {
-                if(!thread_is_stuck[i])
-                {
-                    threads[i].KeepRunning = false;
-                }
-            }
-            while (true)
-            {
-                System.Threading.Thread.Sleep(1000);
-                System.Console.WriteLine($"Watchdog - all threads except the stuck one should now exit, suggesting to break in the debugger");
-            }
+           
         }
 
 
