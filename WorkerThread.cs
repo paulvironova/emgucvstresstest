@@ -126,6 +126,7 @@ namespace EmguStressTest
             double selector = Random.NextDouble();
             if (selector < 0.1)
             {
+                //the input image will be garbage collected - for the finalizer to eventuall reap.
                 return image.Clone();
             }
             if (selector < 0.2)
@@ -193,7 +194,8 @@ namespace EmguStressTest
                 return;
             }
 
-            //dispose it. but only maybe.
+            //dispose it. but only maybe. this is to trigger the
+            //finalizer.
             if (Random.NextDouble() < 0.8)
             {
                 image.Dispose();
@@ -207,7 +209,8 @@ namespace EmguStressTest
 
             var ksize = System.Drawing.Size.Empty;
             Emgu.CV.UMat output;
-            if (GetInPlace())
+            bool inplace = GetInPlace();
+            if (inplace)
             {
                 output = input;
             }
@@ -216,6 +219,10 @@ namespace EmguStressTest
                 output = new Emgu.CV.UMat();
             }
             Emgu.CV.CvInvoke.GaussianBlur(input, output, ksize, sigmax, sigmay);
+            if(!inplace)
+            {
+                input.Dispose();
+            }
             return output;
         }
 
@@ -229,7 +236,7 @@ namespace EmguStressTest
 
             var output = new Emgu.CV.UMat();
             Emgu.CV.CvInvoke.CopyMakeBorder(input, output, top, bottom, left, right, Emgu.CV.CvEnum.BorderType.Reflect, new Emgu.CV.Structure.MCvScalar(Random.NextDouble()));
-
+            input.Dispose();
             return output;
         }
 
@@ -248,6 +255,7 @@ namespace EmguStressTest
             }
             var output = new Emgu.CV.UMat();
             input.ConvertTo(output, MakeRandomFormat(), scale, offset);
+            input.Dispose();
             return output;
         }
 
@@ -273,8 +281,10 @@ namespace EmguStressTest
                 cvResult.SetTo(new Emgu.CV.Structure.MCvScalar(0));
 
                 inputInsideRoi.CopyTo(resultInsideRoi);
-                return cvResult;
+              
             }
+            input.Dispose();
+            return cvResult;
         }
 
         private bool GetInPlace()
