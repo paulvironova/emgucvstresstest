@@ -89,6 +89,12 @@ namespace EmguStressTest
 
         public TimeSpan HangtimeLimit { get; private set; } = TimeSpan.FromSeconds(200);
 
+        /// <summary>
+        /// if positive, runs garbage collection in a separate thread with the given interval in ms.
+        /// this is good to avoid having the GPU to run out of memory.
+        /// </summary>
+        public int GCThreadInterval { get; private set; } = 1000;
+
         // thread safe wrt. Pop
         internal void Push(Emgu.CV.UMat image)
         {
@@ -119,6 +125,21 @@ namespace EmguStressTest
 
         private void Run()
         {
+            //should we run a garbage collection thread?
+            System.Threading.Thread gcinvoker=null;
+            if (GCThreadInterval > 0)
+            {
+                gcinvoker = new System.Threading.Thread(() =>
+                {
+                    while (true)
+                    {
+                        System.Threading.Thread.Sleep(GCThreadInterval);
+                        System.GC.Collect();
+                    }
+                });
+                gcinvoker?.Start();
+            }
+
             var threads = new System.Collections.Generic.List<WorkerThread>();
             for (int i = 0; i < Nthreads_; ++i)
             {
@@ -164,6 +185,7 @@ namespace EmguStressTest
                 threads[i].Join();
                 System.Console.WriteLine($"Thread {i} has stacktrace: {threads[i].StackTrace}");
             }
+            gcinvoker?.Abort();
         }
 
 
