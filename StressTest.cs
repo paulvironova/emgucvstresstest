@@ -195,7 +195,11 @@ namespace EmguStressTest
             //System.Environment.SetEnvironmentVariable("OPENCV_OPENCL_DEVICE", ":GPU:0");
             System.Console.WriteLine($"todiloo! Emgu GPU is {Emgu.CV.Ocl.Device.Default.Name}");
             System.Console.WriteLine($"Current time is {DateTime.UtcNow} UTC");
-
+#if DEBUG
+            System.Console.WriteLine("Buildmode=debug");
+#else
+            System.Console.WriteLine("Buildmode=release");
+#endif
             //setup a program object
             var st = new StressTest();
 
