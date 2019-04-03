@@ -48,7 +48,7 @@ namespace EmguStressTest
                 hangstring += System.FormattableString.Invariant($"{dt.TotalSeconds,5:F1}  ");
                 total += status_[i].lastcounter;
             }
-            System.Console.WriteLine($"{total}" + hangstring);
+            System.Console.WriteLine($"{total} " + hangstring);
         }
         public TimeSpan AgeOfUpdate(int i)
         {
@@ -93,7 +93,7 @@ namespace EmguStressTest
         /// if positive, runs garbage collection in a separate thread with the given interval in ms.
         /// this is good to avoid having the GPU to run out of memory.
         /// </summary>
-        public int GCThreadInterval { get; private set; } = 1000;
+        public int GCThreadInterval { get; private set; } = 10000;
 
         // thread safe wrt. Pop
         internal void Push(Emgu.CV.UMat image)
@@ -194,11 +194,19 @@ namespace EmguStressTest
             //this does not work
             //System.Environment.SetEnvironmentVariable("OPENCV_OPENCL_DEVICE", ":GPU:0");
             System.Console.WriteLine($"todiloo! Emgu GPU is {Emgu.CV.Ocl.Device.Default.Name}");
+            System.Console.WriteLine($"Current time is {DateTime.UtcNow} UTC");
 
             //setup a program object
             var st = new StressTest();
 
-            st.Run();
+            try
+            {
+                st.Run();
+            } catch(System.Exception e)
+            {
+                System.Console.WriteLine($"\n\nCaught exception {e}");
+            }
+            System.Console.WriteLine($"Exiting progam at {DateTime.UtcNow} UTC");
         }
     }
 }
