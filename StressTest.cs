@@ -60,8 +60,6 @@ namespace EmguStressTest
         {
             var ret = TimeSpan.MinValue;
             var now = clock_.Elapsed;
-            string hangstring = "";
-            long total = 0;
             for (int i = 0; i < Nthreads_; ++i)
             {
                 TimeSpan dt = now - status_[i].When;
@@ -126,7 +124,7 @@ namespace EmguStressTest
         private void Run()
         {
             //should we run a garbage collection thread?
-            System.Threading.Thread gcinvoker=null;
+            System.Threading.Thread gcinvoker = null;
             if (GCThreadInterval > 0)
             {
                 gcinvoker = new System.Threading.Thread(() =>
